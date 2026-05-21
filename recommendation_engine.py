@@ -1,53 +1,63 @@
-def filter_predictions(
-    raw_predictions: list[dict],
-    max_results: int = 3,
-    min_confidence: float = 0.45,
-    weak_confidence: float = 0.60,
+def generate_recommendation(
+    total_calories: float,
+    total_proteines: float,
+    total_glucides: float,
+    total_lipides: float,
+    objective: str = "sante"
 ) -> dict:
-    """
-    Nettoie les prédictions IA pour éviter d'afficher trop d'aliments absurdes.
 
-    Le modèle actuel est encore entraîné sur un dataset minuscule.
-    Ce filtre sert donc à rendre les résultats plus crédibles côté utilisateur.
-    """
+    recommendations = []
 
-    if not raw_predictions:
-        return {
-            "status": "no_prediction",
-            "message": "Aucun aliment détecté avec assez de confiance.",
-            "global_confidence": 0,
-            "predictions": []
-        }
+    if total_proteines < 20:
+        recommendations.append(
+            "Le repas semble faible en protéines."
+        )
 
-    sorted_predictions = sorted(
-        raw_predictions,
-        key=lambda item: item["confidence"],
-        reverse=True
-    )
+    if total_legumes_missing(total_glucides, total_lipides):
+        recommendations.append(
+            "Pensez à ajouter davantage de légumes."
+        )
 
-    best_prediction = sorted_predictions[0]
-    best_confidence = best_prediction["confidence"]
+    if total_calories > 900:
+        recommendations.append(
+            "Le repas est assez calorique."
+        )
 
-    filtered_predictions = []
+    if objective == "prise_de_muscle":
+        if total_proteines >= 30:
+            recommendations.append(
+                "Bon apport en protéines pour la prise de muscle."
+            )
+        else:
+            recommendations.append(
+                "Ajoutez davantage de protéines pour favoriser la prise de muscle."
+            )
 
-    for prediction in sorted_predictions:
-        confidence = prediction["confidence"]
+    elif objective == "perte_de_poids":
+        if total_calories < 600:
+            recommendations.append(
+                "Le repas reste raisonnable pour un objectif de perte de poids."
+            )
+        else:
+            recommendations.append(
+                "Le repas est peut-être un peu trop calorique pour une perte de poids."
+            )
 
-        if confidence >= min_confidence:
-            filtered_predictions.append(prediction)
+    elif objective == "maintien":
+        recommendations.append(
+            "Le repas semble adapté à un objectif de maintien."
+        )
 
-    filtered_predictions = filtered_predictions[:max_results]
-
-    if best_confidence < weak_confidence:
-        status = "low_confidence"
-        message = "Analyse incertaine : l'IA n'est pas encore assez sûre du résultat."
     else:
-        status = "ok"
-        message = "Analyse effectuée avec une confiance correcte."
+        recommendations.append(
+            "Essayez de garder un bon équilibre entre protéines, glucides et lipides."
+        )
 
     return {
-        "status": status,
-        "message": message,
-        "global_confidence": round(best_confidence, 3),
-        "predictions": filtered_predictions
+        "objective": objective,
+        "recommendations": recommendations
     }
+
+
+def total_legumes_missing(glucides: float, lipides: float) -> bool:
+    return glucides > 30 and lipides > 10

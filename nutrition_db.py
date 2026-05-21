@@ -1,61 +1,30 @@
-from backend.nutrition_db import get_food_by_name
+from pathlib import Path
+import pandas as pd
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+NUTRITION_FILE = BASE_DIR / "data" / "nutrition.csv"
 
 
-def calculate_food_values(food_data: dict, quantity_g: float) -> dict:
-    factor = quantity_g / 100
+def load_nutrition_data():
+    if not NUTRITION_FILE.exists():
+        raise FileNotFoundError(f"Fichier introuvable : {NUTRITION_FILE}")
 
-    return {
-        "aliment": food_data["aliment"],
-        "quantity_g": quantity_g,
-        "calories": round(food_data["calories_100g"] * factor, 2),
-        "proteines": round(food_data["proteines_100g"] * factor, 2),
-        "glucides": round(food_data["glucides_100g"] * factor, 2),
-        "lipides": round(food_data["lipides_100g"] * factor, 2),
-    }
+    df = pd.read_csv(NUTRITION_FILE)
+    return df
 
 
-def calculate_meal(foods: list[dict]) -> dict:
-    details = []
+def get_all_foods():
+    df = load_nutrition_data()
+    return df.to_dict(orient="records")
 
-    totals = {
-        "total_calories": 0,
-        "total_proteines": 0,
-        "total_glucides": 0,
-        "total_lipides": 0,
-    }
 
-    for item in foods:
-        aliment = item.get("aliment")
-        quantity_g = item.get("quantity_g")
+def get_food_by_name(food_name: str):
+    df = load_nutrition_data()
 
-        if not aliment:
-            raise ValueError("Un aliment est manquant.")
+    food_name = food_name.lower().strip()
+    result = df[df["aliment"].str.lower() == food_name]
 
-        food_data = get_food_by_name(aliment)
+    if result.empty:
+        return None
 
-        if food_data is None:
-            raise ValueError(f"Aliment introuvable : {aliment}")
-
-        if quantity_g is None:
-            quantity_g = food_data["portion_defaut_g"]
-
-        quantity_g = float(quantity_g)
-
-        if quantity_g <= 0:
-            raise ValueError(f"Quantité invalide pour : {aliment}")
-
-        calculated = calculate_food_values(food_data, quantity_g)
-        details.append(calculated)
-
-        totals["total_calories"] += calculated["calories"]
-        totals["total_proteines"] += calculated["proteines"]
-        totals["total_glucides"] += calculated["glucides"]
-        totals["total_lipides"] += calculated["lipides"]
-
-    return {
-        "total_calories": round(totals["total_calories"], 2),
-        "total_proteines": round(totals["total_proteines"], 2),
-        "total_glucides": round(totals["total_glucides"], 2),
-        "total_lipides": round(totals["total_lipides"], 2),
-        "details": details,
-    }
+    return result.iloc[0].to_dict()

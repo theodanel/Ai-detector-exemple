@@ -1,171 +1,61 @@
-from backend.recommendation_engine import generate_recommendation
-from fastapi import FastAPI, HTTPException, UploadFile, File
-from pydantic import BaseModel
-from backend.ai_demo import simulate_food_detection
-from fastapi.middleware.cors import CORSMiddleware
-
-from backend.nutrition_db import get_all_foods, get_food_by_name
-from backend.nutrition_calculator import calculate_meal
-from pathlib import Path
-from fastapi import UploadFile, File
-from backend.ai_inference import predict_foods
+from backend.nutrition_db import get_food_by_name
 
 
-app = FastAPI()
-UPLOADS_DIR = Path("uploads")
-UPLOADS_DIR.mkdir(exist_ok=True)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-class FoodQuantity(BaseModel):
-    aliment: str
-    quantity_g: float | None = None
-
-
-class MealRequest(BaseModel):
-    foods: list[FoodQuantity]
-
-class AnalyzeMealRequest(BaseModel):
-    foods: list[FoodQuantity]
-    objective: str = "sante"    
-
-
-@app.get("/")
-def root():
-    return {"message": "Nutrition AI API fonctionne"}
-
-
-@app.get("/api/nutrition")
-def api_get_all_foods():
-    return get_all_foods()
-
-
-@app.get("/api/nutrition/{food_name}")
-def api_get_food(food_name: str):
-    food = get_food_by_name(food_name)
-
-    if food is None:
-        raise HTTPException(status_code=404, detail="Aliment introuvable")
-
-    return food
-
-
-@app.post("/api/calculate-meal")
-def api_calculate_meal(meal: MealRequest):
-    try:
-        foods_as_dict = [food.model_dump() for food in meal.foods]
-        return calculate_meal(foods_as_dict)
-
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error))
-
-@app.post("/api/analyze-meal")
-def api_analyze_meal(meal: AnalyzeMealRequest):
-    try:
-        foods_as_dict = [food.model_dump() for food in meal.foods]
-
-        nutrition_result = calculate_meal(foods_as_dict)
-
-        recommendation_result = generate_recommendation(
-            total_calories=nutrition_result["total_calories"],
-            total_proteines=nutrition_result["total_proteines"],
-            total_glucides=nutrition_result["total_glucides"],
-            total_lipides=nutrition_result["total_lipides"],
-            objective=meal.objective
-        )
-
-        return {
-            "nutrition": nutrition_result,
-            "recommendation": recommendation_result
-        }
-
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error))        
-
-@app.post("/api/analyze-image-demo")
-def api_analyze_image_demo():
-
-    detection_result = simulate_food_detection()
-
-    foods_for_calculation = []
-
-    for food in detection_result["detected_foods"]:
-        foods_for_calculation.append({
-            "aliment": food["aliment"],
-            "quantity_g": food["estimated_quantity_g"]
-        })
-
-    nutrition_result = calculate_meal(foods_for_calculation)
-
-    recommendation_result = generate_recommendation(
-        total_calories=nutrition_result["total_calories"],
-        total_proteines=nutrition_result["total_proteines"],
-        total_glucides=nutrition_result["total_glucides"],
-        total_lipides=nutrition_result["total_lipides"],
-        objective="sante"
-    )
+def calculate_food_values(food_data: dict, quantity_g: float) -> dict:
+    factor = quantity_g / 100
 
     return {
-        "detection": detection_result,
-        "nutrition": nutrition_result,
-        "recommendation": recommendation_result
-    }        
-
-@app.post("/api/predict-image")
-async def api_predict_image(file: UploadFile = File(...)):
-    upload_path = UPLOADS_DIR / file.filename
-
-    with open(upload_path, "wb") as buffer:
-        content = await file.read()
-        buffer.write(content)
-
-    prediction_result = predict_foods(str(upload_path))
-
-    return {
-        "filename": file.filename,
-        "analysis": prediction_result
+        "aliment": food_data["aliment"],
+        "quantity_g": quantity_g,
+        "calories": round(food_data["calories_100g"] * factor, 2),
+        "proteines": round(food_data["proteines_100g"] * factor, 2),
+        "glucides": round(food_data["glucides_100g"] * factor, 2),
+        "lipides": round(food_data["lipides_100g"] * factor, 2),
     }
 
-@app.post("/api/full-analyze-image")
-async def api_full_analyze_image(file: UploadFile = File(...)):
-    upload_path = UPLOADS_DIR / file.filename
 
-    with open(upload_path, "wb") as buffer:
-        content = await file.read()
-        buffer.write(content)
+def calculate_meal(foods: list[dict]) -> dict:
+    details = []
 
-    prediction_result = predict_foods(str(upload_path))
-    predictions = prediction_result["predictions"]
+    totals = {
+        "total_calories": 0,
+        "total_proteines": 0,
+        "total_glucides": 0,
+        "total_lipides": 0,
+    }
 
-    foods_for_calculation = []
+    for item in foods:
+        aliment = item.get("aliment")
+        quantity_g = item.get("quantity_g")
 
-    for prediction in predictions:
-        foods_for_calculation.append({
-            "aliment": prediction["aliment"],
-            "quantity_g": 100
-        })
+        if not aliment:
+            raise ValueError("Un aliment est manquant.")
 
-    nutrition_result = calculate_meal(foods_for_calculation)
+        food_data = get_food_by_name(aliment)
 
-    recommendation_result = generate_recommendation(
-        total_calories=nutrition_result["total_calories"],
-        total_proteines=nutrition_result["total_proteines"],
-        total_glucides=nutrition_result["total_glucides"],
-        total_lipides=nutrition_result["total_lipides"],
-        objective="sante"
-    )
+        if food_data is None:
+            raise ValueError(f"Aliment introuvable : {aliment}")
+
+        if quantity_g is None:
+            quantity_g = food_data["portion_defaut_g"]
+
+        quantity_g = float(quantity_g)
+
+        if quantity_g <= 0:
+            raise ValueError(f"Quantité invalide pour : {aliment}")
+
+        calculated = calculate_food_values(food_data, quantity_g)
+        details.append(calculated)
+
+        totals["total_calories"] += calculated["calories"]
+        totals["total_proteines"] += calculated["proteines"]
+        totals["total_glucides"] += calculated["glucides"]
+        totals["total_lipides"] += calculated["lipides"]
 
     return {
-        "filename": file.filename,
-        "analysis": prediction_result,
-        "predictions": predictions,
-        "estimated_portions": foods_for_calculation,
-        "nutrition": nutrition_result,
-        "recommendation": recommendation_result
-    }   
+        "total_calories": round(totals["total_calories"], 2),
+        "total_proteines": round(totals["total_proteines"], 2),
+        "total_glucides": round(totals["total_glucides"], 2),
+        "total_lipides": round(totals["total_lipides"], 2),
+        "details": details,
+    }
