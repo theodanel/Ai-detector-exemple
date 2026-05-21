@@ -1,0 +1,180 @@
+const imageInput = document.getElementById("imageInput");
+const imagePreview = document.getElementById("imagePreview");
+
+const analyzeButton = document.getElementById("analyzeButton");
+
+const resultsContent = document.getElementById("resultsContent");
+const loadingMessage = document.getElementById("loadingMessage");
+
+
+imageInput.addEventListener("change", () => {
+    const file = imageInput.files[0];
+
+    if (!file) {
+        return;
+    }
+
+    const imageUrl = URL.createObjectURL(file);
+
+    imagePreview.src = imageUrl;
+    imagePreview.style.display = "block";
+});
+
+
+analyzeButton.addEventListener("click", async () => {
+
+    const file = imageInput.files[0];
+
+    if (!file) {
+        alert("Sélectionnez une image.");
+        return;
+    }
+
+    loadingMessage.classList.remove("hidden");
+
+    resultsContent.innerHTML = "";
+
+    const formData = new FormData();
+
+    formData.append("file", file);
+
+    try {
+
+        const response = await fetch(
+            "http://127.0.0.1:8000/api/full-analyze-image",
+            {
+                method: "POST",
+                body: formData
+            }
+        );
+
+        const data = await response.json();
+
+        displayResults(data);
+
+    } catch (error) {
+
+        resultsContent.innerHTML = `
+            <p>Erreur pendant l'analyse.</p>
+        `;
+
+        console.error(error);
+
+    } finally {
+
+        loadingMessage.classList.add("hidden");
+
+    }
+
+});
+
+
+function displayResults(data) {
+
+    const analysis = data.analysis;
+
+    const predictionsHtml = analysis.predictions
+        .map(prediction => {
+
+            const percent = Math.round(
+                prediction.confidence * 100
+            );
+
+            return `
+                <div class="prediction-item">
+
+                    <div class="prediction-header">
+                        <span>${prediction.aliment}</span>
+                        <span>${percent}%</span>
+                    </div>
+
+                    <div class="prediction-bar">
+                        <div
+                            class="prediction-fill"
+                            style="width:${percent}%"
+                        ></div>
+                    </div>
+
+                </div>
+            `;
+        })
+        .join("");
+
+    const recommendationsHtml = data.recommendation.recommendations
+        .map(recommendation => `
+            <li>${recommendation}</li>
+        `)
+        .join("");
+
+    resultsContent.innerHTML = `
+
+            <div class="result-card">
+            <h3>Fiabilité de l'analyse</h3>
+
+            <p>${analysis.message}</p>
+            <p>Confiance globale : ${Math.round(analysis.global_confidence * 100)}%</p>
+        </div>        
+
+        <div class="result-card">
+            <h3>Aliments détectés</h3>
+
+            ${predictionsHtml}
+        </div>
+
+        <div class="result-card">
+            <h3>Macros nutritionnelles</h3>
+
+            <div class="macro-grid">
+
+                <div class="macro-box">
+                    <div class="macro-label">
+                        Calories
+                    </div>
+
+                    <div class="macro-value">
+                        ${Math.round(data.nutrition.total_calories)}
+                    </div>
+                </div>
+
+                <div class="macro-box">
+                    <div class="macro-label">
+                        Protéines
+                    </div>
+
+                    <div class="macro-value">
+                        ${data.nutrition.total_proteines} g
+                    </div>
+                </div>
+
+                <div class="macro-box">
+                    <div class="macro-label">
+                        Glucides
+                    </div>
+
+                    <div class="macro-value">
+                        ${data.nutrition.total_glucides} g
+                    </div>
+                </div>
+
+                <div class="macro-box">
+                    <div class="macro-label">
+                        Lipides
+                    </div>
+
+                    <div class="macro-value">
+                        ${data.nutrition.total_lipides} g
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="result-card">
+            <h3>Recommandations</h3>
+
+            <ul class="recommendation-list">
+                ${recommendationsHtml}
+            </ul>
+        </div>
+    `;
+}

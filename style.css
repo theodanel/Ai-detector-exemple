@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Nutrition AI</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <main class="app">
+        <section class="hero">
+            <div class="badge">IA locale • PyTorch • CUDA</div>
+            <h1>Nutrition AI</h1>
+            <p>
+                Analyse une photo de repas, détecte les aliments,
+                estime les calories et affiche les macros.
+            </p>
+        </section>
+
+        <section class="layout">
+            <section class="panel upload-panel">
+                <h2>Photo du repas</h2>
+
+                <label class="drop-zone" for="imageInput">
+                    <span class="drop-title">Clique ici pour choisir une image</span>
+                    <span class="drop-subtitle">JPG, PNG ou WEBP</span>
+                </label>
+
+                <input type="file" id="imageInput" accept="image/*">
+
+                <div class="preview-wrapper">
+                    <img id="imagePreview" alt="Aperçu de l'image">
+                </div>
+
+                <button id="analyzeButton">
+                    Analyser le repas
+                </button>
+            </section>
+
+            <section class="panel results-panel">
+                <h2>Résultat</h2>
+
+                <div id="loadingMessage" class="hidden loading">
+                    Analyse en cours...
+                </div>
+
+                <div id="resultsContent" class="empty-state">
+                    Sélectionne une image pour lancer l’analyse.
+                </div>
+            </section>
+        </section>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>
